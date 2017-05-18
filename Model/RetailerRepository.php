@@ -14,11 +14,10 @@ namespace Smile\Retailer\Model;
 
 use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\Api\SortOrder;
-
 use Smile\Retailer\Api\Data\RetailerInterface;
 use Smile\Retailer\Api\Data\RetailerSearchResultsInterface;
-use Smile\Retailer\Api\RetailerRepositoryInterface;
 use Smile\Retailer\Api\Data\RetailerSearchResultsInterfaceFactory;
+use Smile\Retailer\Api\RetailerRepositoryInterface;
 use Smile\Retailer\Model\ResourceModel\Retailer\Collection;
 use Smile\Retailer\Model\ResourceModel\Retailer\CollectionFactory;
 
@@ -59,7 +58,8 @@ class RetailerRepository implements RetailerRepositoryInterface
         \Smile\Retailer\Api\Data\RetailerInterfaceFactory $retailerFactory,
         RetailerSearchResultsInterfaceFactory $searchResultFactory,
         CollectionFactory $collectionFactory
-    ) {
+    )
+    {
         $this->sellerRepository = $sellerRepositoryFactory->create([
             'sellerFactory'    => $retailerFactory,
             'attributeSetName' => RetailerInterface::ATTRIBUTE_SET_RETAILER,
@@ -74,6 +74,14 @@ class RetailerRepository implements RetailerRepositoryInterface
      */
     public function save(\Smile\Retailer\Api\Data\RetailerInterface $retailer)
     {
+        // Set data from «extension_attributes» proporty of $retailer as direct $retailer data
+        /** @var \Smile\Retailer\Model\Retailer $retailer */
+        $dataToAddToRetailer = [
+            'address' => $retailer->getExtensionAttributes()->getAddress(),
+        ];
+
+        $retailer->addData($dataToAddToRetailer);
+
         return $this->sellerRepository->save($retailer);
     }
 
@@ -131,6 +139,31 @@ class RetailerRepository implements RetailerRepositoryInterface
     }
 
     /**
+     * Helper function that adds a FilterGroup to the collection.
+     *
+     * @param \Magento\Framework\Api\Search\FilterGroup $filterGroup Filter Group
+     * @param Collection                                $collection  Retailer collection
+     *
+     * @return void
+     */
+    protected function addFilterGroupToCollection(
+        \Magento\Framework\Api\Search\FilterGroup $filterGroup,
+        Collection $collection
+    )
+    {
+        $fields = [];
+        foreach ($filterGroup->getFilters() as $filter) {
+            $conditionType = $filter->getConditionType() ? $filter->getConditionType() : 'eq';
+
+            $fields[] = ['attribute' => $filter->getField(), $conditionType => $filter->getValue()];
+        }
+
+        if ($fields) {
+            $collection->addFieldToFilter($fields);
+        }
+    }
+
+    /**
      * {@inheritDoc}
      */
     public function delete(\Smile\Retailer\Api\Data\RetailerInterface $retailer)
@@ -144,29 +177,5 @@ class RetailerRepository implements RetailerRepositoryInterface
     public function deleteByIdentifier($retailerId)
     {
         return $this->sellerRepository->deleteByIdentifier($retailerId);
-    }
-
-    /**
-     * Helper function that adds a FilterGroup to the collection.
-     *
-     * @param \Magento\Framework\Api\Search\FilterGroup $filterGroup Filter Group
-     * @param Collection                                $collection  Retailer collection
-     *
-     * @return void
-     */
-    protected function addFilterGroupToCollection(
-        \Magento\Framework\Api\Search\FilterGroup $filterGroup,
-        Collection $collection
-    ) {
-        $fields = [];
-        foreach ($filterGroup->getFilters() as $filter) {
-            $conditionType = $filter->getConditionType() ? $filter->getConditionType() : 'eq';
-
-            $fields[] = ['attribute' => $filter->getField(), $conditionType => $filter->getValue()];
-        }
-
-        if ($fields) {
-            $collection->addFieldToFilter($fields);
-        }
     }
 }
