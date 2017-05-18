@@ -81,16 +81,9 @@ class RetailerRepository implements RetailerRepositoryInterface
         ];
 
         $retailer->addData($dataToAddToRetailer);
+        $this->sellerRepository->save($retailer);
 
-        return $this->sellerRepository->save($retailer);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function get($retailerId, $storeId = null)
-    {
-        return $this->sellerRepository->get($retailerId, $storeId);
+        return $this->getByCode($retailer->getSellerCode());
     }
 
     /**
@@ -99,6 +92,14 @@ class RetailerRepository implements RetailerRepositoryInterface
     public function getByCode($retailerCode, $storeId = null)
     {
         return $this->sellerRepository->getByCode($retailerCode, $storeId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function get($retailerId, $storeId = null)
+    {
+        return $this->sellerRepository->get($retailerId, $storeId);
     }
 
     /**
