@@ -15,7 +15,6 @@
 -->
 
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
-
     <route url="/V1/retailer/get/:retailerId" method="GET">
         <service class="Smile\Retailer\Api\RetailerRepositoryInterface" method="get"/>
         <resources>
@@ -23,4 +22,10 @@
         </resources>
     </route>
 
+    <route url="/V1/retailer" method="POST">
+        <service class="Smile\Retailer\Api\RetailerRepositoryInterface" method="save"/>
+        <resources>
+            <resource ref="Smile_Retailer::retailers"/>
+        </resources>
+    </route>
 </routes>

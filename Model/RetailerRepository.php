@@ -12,14 +12,18 @@
  */
 namespace Smile\Retailer\Model;
 
+use Magento\Framework\Api\ExtensibleDataInterface;
 use Magento\Framework\Api\SearchCriteriaInterface;
 use Magento\Framework\Api\SortOrder;
+use Magento\Framework\Exception\NoSuchEntityException;
+use Smile\Retailer\Api\Data\RetailerExtension;
 use Smile\Retailer\Api\Data\RetailerInterface;
 use Smile\Retailer\Api\Data\RetailerSearchResultsInterface;
 use Smile\Retailer\Api\Data\RetailerSearchResultsInterfaceFactory;
 use Smile\Retailer\Api\RetailerRepositoryInterface;
 use Smile\Retailer\Model\ResourceModel\Retailer\Collection;
 use Smile\Retailer\Model\ResourceModel\Retailer\CollectionFactory;
+use Smile\StoreLocator\Api\Data\RetailerTimeSlotInterface;
 
 /**
  * Retailer Repository
@@ -33,31 +37,50 @@ class RetailerRepository implements RetailerRepositoryInterface
     /**
      * @var \Smile\Seller\Model\SellerRepository
      */
-    private $sellerRepository;
+    protected $sellerRepository;
 
     /**
      * @var RetailerSearchResultsInterfaceFactory
      */
-    private $searchResultFactory;
+    protected $searchResultFactory;
+
+    /**
+     * @var \Smile\Retailer\Api\Data\RetailerInterfaceFactory
+     */
+    protected $retailerFactory;
 
     /**
      * @var CollectionFactory
      */
-    private $collectionFactory;
+    protected $collectionFactory;
+
+    /**
+     * @var \Magento\Framework\Api\ExtensibleDataObjectConverter
+     */
+    protected $extensibleDataObjectConverter;
+
+    /**
+     * @var \Magento\Store\Model\StoreManagerInterface
+     */
+    protected $storeManager;
 
     /**
      * Constructor.
      *
-     * @param \Smile\Seller\Model\SellerRepositoryFactory       $sellerRepositoryFactory Seller repository.
-     * @param \Smile\Retailer\Api\Data\RetailerInterfaceFactory $retailerFactory         Retailer factory.
-     * @param RetailerSearchResultsInterfaceFactory             $searchResultFactory     Search Result factory.
-     * @param CollectionFactory                                 $collectionFactory       Collection factory.
+     * @param \Smile\Seller\Model\SellerRepositoryFactory          $sellerRepositoryFactory Seller repository.
+     * @param \Smile\Retailer\Api\Data\RetailerInterfaceFactory    $retailerFactory         Retailer factory.
+     * @param RetailerSearchResultsInterfaceFactory                $searchResultFactory     Search Result factory.
+     * @param CollectionFactory                                    $collectionFactory       Collection factory.
+     * @param \Magento\Framework\Api\ExtensibleDataObjectConverter $extensibleDataObjectConverter
+     * @param \Magento\Store\Model\StoreManagerInterface           $storeManager
      */
     public function __construct(
         \Smile\Seller\Model\SellerRepositoryFactory $sellerRepositoryFactory,
         \Smile\Retailer\Api\Data\RetailerInterfaceFactory $retailerFactory,
         RetailerSearchResultsInterfaceFactory $searchResultFactory,
-        CollectionFactory $collectionFactory
+        CollectionFactory $collectionFactory,
+        \Magento\Framework\Api\ExtensibleDataObjectConverter $extensibleDataObjectConverter,
+        \Magento\Store\Model\StoreManagerInterface $storeManager
     )
     {
         $this->sellerRepository = $sellerRepositoryFactory->create([
@@ -65,8 +88,11 @@ class RetailerRepository implements RetailerRepositoryInterface
             'attributeSetName' => RetailerInterface::ATTRIBUTE_SET_RETAILER,
         ]);
 
+        $this->retailerFactory = $retailerFactory;
         $this->searchResultFactory = $searchResultFactory;
         $this->collectionFactory = $collectionFactory;
+        $this->extensibleDataObjectConverter = $extensibleDataObjectConverter;
+        $this->storeManager = $storeManager;
     }
 
     /**
@@ -74,13 +100,26 @@ class RetailerRepository implements RetailerRepositoryInterface
      */
     public function save(\Smile\Retailer\Api\Data\RetailerInterface $retailer)
     {
-        // Set data from «extension_attributes» proporty of $retailer as direct $retailer data
+        /** @var \Smile\Retailer\Model\Retailer $existingRetailer */
         /** @var \Smile\Retailer\Model\Retailer $retailer */
-        $dataToAddToRetailer = [
-            'address' => $retailer->getExtensionAttributes()->getAddress(),
-        ];
+        // Handle case of create / update
+        try {
+            $existingRetailer = $this->getByCode($retailer->getSellerCode());
+        } catch (NoSuchEntityException $e) {
+            $existingRetailer = null;
+        }
 
-        $retailer->addData($dataToAddToRetailer);
+        // Retrieve existing data and override by input data
+        $retailerDataArray = $this->extensibleDataObjectConverter
+            ->toNestedArray($retailer, [], 'Smile\Retailer\Api\Data\RetailerExtensionInterface');
+        $retailerDataArray = array_replace($retailerDataArray, $retailer->getData());
+
+        // Case of address : set data from «extension_attributes» property of $retailer as direct $retailer data
+        if (null !== $retailer->getExtensionAttributes() && null !== $retailer->getExtensionAttributes()->getAddress()) {
+            $retailerDataArray['address'] = $retailer->getExtensionAttributes()->getAddress();
+        }
+
+        $retailer = $this->initializeRetailerData($retailerDataArray, $existingRetailer);
         $this->sellerRepository->save($retailer);
 
         return $this->getByCode($retailer->getSellerCode());
@@ -92,6 +131,81 @@ class RetailerRepository implements RetailerRepositoryInterface
     public function getByCode($retailerCode, $storeId = null)
     {
         return $this->sellerRepository->getByCode($retailerCode, $storeId);
+    }
+
+    /**
+     * Merge data from DB and updates from request
+     *
+     * @param array                          $retailerData
+     * @param \Smile\Retailer\Model\Retailer $existingRetailer
+     *
+     * @return \Smile\Retailer\Api\Data\RetailerInterface
+     * @throws NoSuchEntityException
+     */
+    protected function initializeRetailerData(array $retailerData, $existingRetailer = null)
+    {
+        if (null === $existingRetailer) {
+            $retailer = $this->retailerFactory->create();
+        } else {
+            $retailer = $existingRetailer;
+        }
+
+        if ($this->storeManager->hasSingleStore()) {
+            $retailerData['store_id'] = 0;
+        }
+
+        $retailer->addData($retailerData);
+
+        // Handle case of extension_attributes data
+        if (isset($retailerData[ExtensibleDataInterface::EXTENSION_ATTRIBUTES_KEY])
+            && null !== $retailerData[ExtensibleDataInterface::EXTENSION_ATTRIBUTES_KEY]
+        ) {
+            /** @var RetailerExtension $extensionAttributes */
+            $extensionAttributes = $retailerData[ExtensibleDataInterface::EXTENSION_ATTRIBUTES_KEY];
+            $retailer->addData($extensionAttributes->__toArray());
+
+            // Specific cases of RetailerTimeSlot
+            $this->rebuildRetailerTimeSlotsData($retailer, 'opening_hours');
+            $this->rebuildRetailerTimeSlotsData($retailer, 'special_opening_hours');
+        }
+
+        return $retailer;
+    }
+
+    /**
+     * Re-build data of type RetailerTimeSlot… because RetailerTimeSlot::saveTimeSlots is called but do not handle schema used by API :-/.
+     *
+     * @param RetailerInterface $retailer
+     * @param                   $attributeCode
+     *
+     * @return RetailerInterface
+     * @see RetailerTimeSlot::saveTimeSlots
+     */
+    protected function rebuildRetailerTimeSlotsData(RetailerInterface $retailer, $attributeCode)
+    {
+        $retailerTimeSlotsData = $retailer->getData($attributeCode);
+        if (null !== $retailerTimeSlotsData) {
+            $rebuiltRetailerTimeSlotData = [];
+
+            /** @var RetailerTimeSlotInterface $retailerTimeSlotData */
+            foreach ($retailerTimeSlotsData as $retailerTimeSlotData) {
+                if (null !== $retailerTimeSlotData->getDayOfWeek()) {
+                    $dayOfWeek = (int) $retailerTimeSlotData->getDayOfWeek();
+                    unset($retailerTimeSlotData[RetailerTimeSlotInterface::DAY_OF_WEEK_FIELD]);
+
+                    $rebuiltRetailerTimeSlotData[$dayOfWeek][] = $retailerTimeSlotData;
+                } elseif (null !== $retailerTimeSlotData->getDate()) {
+                    $date = $retailerTimeSlotData->getDate();
+                    unset($retailerTimeSlotData[RetailerTimeSlotInterface::DATE_FIELD]);
+
+                    $rebuiltRetailerTimeSlotData[$date][] = $retailerTimeSlotData;
+                } // FIXME else throw exception ?
+            }
+
+            $retailer->setData($attributeCode, $rebuiltRetailerTimeSlotData);
+        }
+
+        return $retailer;
     }
 
     /**
