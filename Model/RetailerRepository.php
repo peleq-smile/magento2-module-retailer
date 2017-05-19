@@ -165,8 +165,14 @@ class RetailerRepository implements RetailerRepositoryInterface
             $retailer->addData($extensionAttributes->__toArray());
 
             // Specific cases of RetailerTimeSlot
-            $this->rebuildRetailerTimeSlotsData($retailer, 'opening_hours');
-            $this->rebuildRetailerTimeSlotsData($retailer, 'special_opening_hours');
+            if ($extensionAttributes->getOpeningHours()) {
+                $rebuiltRetailerTimeSlotData = $this->rebuildRetailerTimeSlotsData($extensionAttributes->getOpeningHours());
+                $retailer->setData('opening_hours', $rebuiltRetailerTimeSlotData);
+            }
+            if ($extensionAttributes->getSpecialOpeningHours()) {
+                $rebuiltRetailerTimeSlotData = $this->rebuildRetailerTimeSlotsData($extensionAttributes->getSpecialOpeningHours());
+                $retailer->setData('special_opening_hours', $rebuiltRetailerTimeSlotData);
+            }
         }
 
         return $retailer;
@@ -175,18 +181,16 @@ class RetailerRepository implements RetailerRepositoryInterface
     /**
      * Re-build data of type RetailerTimeSlot… because RetailerTimeSlot::saveTimeSlots is called but do not handle schema used by API :-/.
      *
-     * @param RetailerInterface $retailer
-     * @param                   $attributeCode
+     * @param array $retailerTimeSlotsData
      *
      * @return RetailerInterface
-     * @see RetailerTimeSlot::saveTimeSlots
+     * @see      RetailerTimeSlot::saveTimeSlots
      */
-    protected function rebuildRetailerTimeSlotsData(RetailerInterface $retailer, $attributeCode)
+    protected function rebuildRetailerTimeSlotsData(array $retailerTimeSlotsData)
     {
-        $retailerTimeSlotsData = $retailer->getData($attributeCode);
-        if (null !== $retailerTimeSlotsData) {
-            $rebuiltRetailerTimeSlotData = [];
+        $rebuiltRetailerTimeSlotData = [];
 
+        if (null !== $retailerTimeSlotsData) {
             /** @var RetailerTimeSlotInterface $retailerTimeSlotData */
             foreach ($retailerTimeSlotsData as $retailerTimeSlotData) {
                 if (null !== $retailerTimeSlotData->getDayOfWeek()) {
@@ -201,11 +205,9 @@ class RetailerRepository implements RetailerRepositoryInterface
                     $rebuiltRetailerTimeSlotData[$date][] = $retailerTimeSlotData;
                 } // FIXME else throw exception ?
             }
-
-            $retailer->setData($attributeCode, $rebuiltRetailerTimeSlotData);
         }
 
-        return $retailer;
+        return $rebuiltRetailerTimeSlotData;
     }
 
     /**
