@@ -205,14 +205,6 @@ class RetailerRepository implements RetailerRepositoryInterface
 
                     $rebuiltRetailerTimeSlotData[$date][] = $retailerTimeSlotData;
                 } // FIXME else throw exception ?
-
-                // Handle extension_attributes
-                /** @var \Smile\StoreLocator\Api\Data\RetailerTimeSlotExtension $extensionAttributes */
-                $extensionAttributes = $retailerTimeSlotData->getExtensionAttributes();
-                $extensionAttributesData = $extensionAttributes->__toArray();
-                if (!empty($extensionAttributesData)) {
-                    $retailerTimeSlotData->addData($extensionAttributes->__toArray());
-                }
             }
         }
 
