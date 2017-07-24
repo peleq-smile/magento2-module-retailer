@@ -10,6 +10,7 @@
  * @copyright 2016 Smile
  * @license   Open Software License ("OSL") v. 3.0
  */
+
 namespace Smile\Retailer\Model;
 
 use Magento\Framework\Api\ExtensibleDataInterface;
@@ -183,15 +184,15 @@ class RetailerRepository implements RetailerRepositoryInterface
      *
      * @param array $retailerTimeSlotsData
      *
-     * @return RetailerInterface
-     * @see      RetailerTimeSlot::saveTimeSlots
+     * @return array
+     * @see    RetailerTimeSlot::saveTimeSlots
      */
     protected function rebuildRetailerTimeSlotsData(array $retailerTimeSlotsData)
     {
         $rebuiltRetailerTimeSlotData = [];
 
         if (null !== $retailerTimeSlotsData) {
-            /** @var RetailerTimeSlotInterface $retailerTimeSlotData */
+            /** @var \Smile\StoreLocator\Model\Data\RetailerTimeSlot $retailerTimeSlotData */
             foreach ($retailerTimeSlotsData as $retailerTimeSlotData) {
                 if (null !== $retailerTimeSlotData->getDayOfWeek()) {
                     $dayOfWeek = (int) $retailerTimeSlotData->getDayOfWeek();
@@ -204,6 +205,14 @@ class RetailerRepository implements RetailerRepositoryInterface
 
                     $rebuiltRetailerTimeSlotData[$date][] = $retailerTimeSlotData;
                 } // FIXME else throw exception ?
+
+                // Handle extension_attributes
+                /** @var \Smile\StoreLocator\Api\Data\RetailerTimeSlotExtension $extensionAttributes */
+                $extensionAttributes = $retailerTimeSlotData->getExtensionAttributes();
+                $extensionAttributesData = $extensionAttributes->__toArray();
+                if (!empty($extensionAttributesData)) {
+                    $retailerTimeSlotData->addData($extensionAttributes->__toArray());
+                }
             }
         }
 
