@@ -12,6 +12,7 @@
  */
 namespace Smile\Retailer\Model;
 
+use Magento\Framework\Exception\CouldNotSaveException;
 use Smile\Retailer\Api\Data\RetailerInterface;
 use Smile\Seller\Model\Seller;
 
@@ -24,19 +25,6 @@ use Smile\Seller\Model\Seller;
  */
 class Retailer extends Seller implements RetailerInterface
 {
-    /**
-     * {@inheritDoc}
-     */
-    public function getExtensionAttributes()
-    {
-        $extensionAttributes = $this->_getExtensionAttributes();
-        if (!$extensionAttributes) {
-            return $this->extensionAttributesFactory->create('Smile\Retailer\Api\Data\RetailerInterface');
-        }
-
-        return $extensionAttributes;
-    }
-
     /**
      * {@inheritDoc}
      */
@@ -53,5 +41,38 @@ class Retailer extends Seller implements RetailerInterface
     public function getAttributeSetName()
     {
         return ucfirst(self::ATTRIBUTE_SET_RETAILER);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function beforeSave()
+    {
+        // Validation
+        foreach (['seller_code', 'name'] as $requiredData) {
+            if (null === $this->getData($requiredData) || empty($this->getData($requiredData))) {
+                throw new CouldNotSaveException(__("Missing $requiredData data."));
+            }
+        }
+
+        $extensionAttributes = $this->getExtensionAttributes();
+        if (null !== $extensionAttributes && null === $extensionAttributes->getAddress()) {
+            throw new CouldNotSaveException(__('Missing address data.'));
+        }
+
+        return parent::beforeSave();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getExtensionAttributes()
+    {
+        $extensionAttributes = $this->_getExtensionAttributes();
+        if (!$extensionAttributes) {
+            return $this->extensionAttributesFactory->create('Smile\Retailer\Api\Data\RetailerInterface');
+        }
+
+        return $extensionAttributes;
     }
 }
