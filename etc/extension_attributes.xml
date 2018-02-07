@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Api/etc/extension_attributes.xsd">
+    <extension_attributes for="Smile\Retailer\Api\Data\RetailerInterface">
+        <attribute code="contact_phone" type="string" />
+        <attribute code="contact_fax" type="string" />
+        <attribute code="contact_mail" type="string" />
+    </extension_attributes>
+</config>
